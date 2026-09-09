@@ -294,9 +294,38 @@ Double $\sigma_T$ from 2.22 to 4.44 and rerun the experiment.
 Does the spread of fitted slopes change?
 Does the ratio between the oscillator's spread and the no-memory spread change?
 
-**Your answer.**
+```{julia}
+#| solution: false
+#| output: false
+rng_ex1 = MersenneTwister(543)
+T_long_ex1, _ = simulate_sro(rng_ex1; n_years=10_000, σT=4.44)
 
-> *Answer here*
+rng_ex1_w = MersenneTwister(543)
+starts_ex1 = rand(rng_ex1_w, 1:(length(T_long_ex1) - 50), n_trials)
+slopes_ex1 = [ols_slope(T_long_ex1[s:(s + 49)]) for s in starts_ex1]
+slopes_indep_ex1 = [ols_slope(randn(rng_ex1_w, 50) .* std(T_long_ex1)) for _ in 1:n_trials]
+```
+
+```{julia}
+#| solution: false
+fig = Figure(; size=(760, 320))
+ax = Axis(fig[1, 1]; xlabel=L"\text{fitted slope (K decade}^{-1}\text{)}", ylabel=L"\text{density}")
+hist!(ax, slopes_indep_ex1 .* 10; bins=50, normalization=:pdf, color=(:gray, 0.6), label=L"\text{no memory, }\sigma_T=4.44")
+hist!(ax, slopes_ex1 .* 10; bins=50, normalization=:pdf, color=(:firebrick, 0.6), label=L"\text{oscillator, }\sigma_T=4.44")
+hideydecorations!(ax)
+axislegend(ax; position=:rt)
+fig
+```
+
+```{julia}
+#| solution: false
+@printf("σT=2.22: oscillator %.3g K/dec, no-memory %.3g K/dec, ratio %.3g\n",
+    std(slopes) * 10, std(slopes_independent) * 10, std(slopes) / std(slopes_independent))
+@printf("σT=4.44: oscillator %.3g K/dec, no-memory %.3g K/dec, ratio %.3g",
+    std(slopes_ex1) * 10, std(slopes_indep_ex1) * 10, std(slopes_ex1) / std(slopes_indep_ex1))
+```
+
+> The spread roughly doubles for both the oscillator and the no-memory series, but the ratio between them stays about the same. Makes sense—louder noise just scales everything up, it doesn't change how much the series remembers its past. So more noise means bigger swings, but the oscillator is still the same multiple wider than the no-memory case.
 
 
 ### Vary the record length
@@ -305,9 +334,38 @@ Run the same experiment with 100-year windows instead of 50.
 Report the slope spread and compare it to the 50-year result.
 Does doubling the record length halve the spread?
 
-**Your answer.**
+```{julia}
+#| solution: false
+#| output: false
+rng_ex2 = MersenneTwister(543)
+starts_ex2 = rand(rng_ex2, 1:(length(T_long) - 100), n_trials)
+slopes_ex2 = [ols_slope(T_long[s:(s + 99)]) for s in starts_ex2]
+slopes_indep_ex2 = [ols_slope(randn(rng_ex2, 100) .* std(T_long)) for _ in 1:n_trials]
+```
 
-> *Answer here*
+```{julia}
+#| solution: false
+fig = Figure(; size=(760, 320))
+ax = Axis(fig[1, 1]; xlabel=L"\text{fitted slope (K decade}^{-1}\text{)}", ylabel=L"\text{density}")
+hist!(ax, slopes_indep_ex2 .* 10; bins=50, normalization=:pdf, color=(:gray, 0.6), label=L"\text{no memory, 100yr}")
+hist!(ax, slopes_ex2 .* 10; bins=50, normalization=:pdf, color=(:steelblue, 0.6), label=L"\text{oscillator, 100yr}")
+hist!(ax, slopes .* 10; bins=50, normalization=:pdf, color=(:firebrick, 0.3), label=L"\text{oscillator, 50yr}")
+hideydecorations!(ax)
+axislegend(ax; position=:rt)
+fig
+```
+
+```{julia}
+#| solution: false
+@printf("50yr:  oscillator %.3g K/dec, no-memory %.3g K/dec\n",
+    std(slopes) * 10, std(slopes_independent) * 10)
+@printf("100yr: oscillator %.3g K/dec, no-memory %.3g K/dec\n",
+    std(slopes_ex2) * 10, std(slopes_indep_ex2) * 10)
+@printf("reduction factor (50yr/100yr): oscillator %.3g, no-memory %.3g",
+    std(slopes) / std(slopes_ex2), std(slopes_independent) / std(slopes_indep_ex2))
+```
+
+> The spread goes down with 100-year windows, but nowhere near half. The no-memory series shrinks faster (more like 2–3×) while the oscillator shrinks less, because adjacent years aren't independent—there's memory dragging them together. Basically, more data helps less than you'd hope when the series is persistent.
 
 
 ### Compare to a fitted AR(1)
@@ -316,9 +374,41 @@ Fit an AR(1) to the annual $T$ series from the long run by computing the lag-1 s
 Simulate a 10,000-year AR(1) series at that coefficient, draw 1,000 random 50-year windows, and compare the slope spread to the recharge oscillator's.
 How close are the two, and what does the comparison tell you?
 
-**Your answer.**
+```{julia}
+#| solution: false
+#| output: false
+a1 = autocor(T_long, [1])[1]
+σ_innov = std(T_long) * sqrt(1 - a1^2)
 
-> *Answer here*
+rng_ar1 = MersenneTwister(543)
+T_ar1 = zeros(10_000)
+for i in 2:10_000
+    T_ar1[i] = a1 * T_ar1[i - 1] + σ_innov * randn(rng_ar1)
+end
+
+starts_ar1 = rand(rng_ar1, 1:(length(T_ar1) - 50), n_trials)
+slopes_ar1 = [ols_slope(T_ar1[s:(s + 49)]) for s in starts_ar1]
+```
+
+```{julia}
+#| solution: false
+fig = Figure(; size=(760, 320))
+ax = Axis(fig[1, 1]; xlabel=L"\text{fitted slope (K decade}^{-1}\text{)}", ylabel=L"\text{density}")
+hist!(ax, slopes .* 10; bins=50, normalization=:pdf, color=(:firebrick, 0.6), label=L"\text{recharge oscillator}")
+hist!(ax, slopes_ar1 .* 10; bins=50, normalization=:pdf, color=(:dodgerblue, 0.6), label=L"\text{AR(1) fit}")
+hideydecorations!(ax)
+axislegend(ax; position=:rt)
+fig
+```
+
+```{julia}
+#| solution: false
+@printf("lag-1 autocorrelation a = %.4f\n", a1)
+@printf("slope spread (K/decade): oscillator %.3g, AR(1) %.3g, ratio %.3g",
+    std(slopes) * 10, std(slopes_ar1) * 10, std(slopes_ar1) / std(slopes))
+```
+
+> The two distributions land almost on top of each other. A simple AR(1) with one number—the lag-1 autocorrelation—basically reproduces the full oscillator's slope spread. The $T$–$h$ coupling and the two-variable dynamics don't really add anything here. What's driving the wide slopes is just the memory ($a \approx 0.74$), not any of the extra physics.
 
 
 ## Turning it in
